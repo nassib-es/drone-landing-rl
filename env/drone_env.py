@@ -39,6 +39,15 @@ class DroneEnv:
         self.steps           = 0
         self.reset()
 
+    def normalize_state(self, state):
+        state[0] /= 10.0
+        state[1] /= 15.0
+        state[2] /= 10.0
+        state[3] /= 10.0
+        state[4] /= 10.0
+        state[5] /= 5.0
+        return state
+
     def reset(self):
         # Drone starts at random position near top
         drone_x   = np.random.uniform(-5, 5)
@@ -56,7 +65,7 @@ class DroneEnv:
         ], dtype=np.float32)
 
         self.steps = 0
-        return self.state.copy()
+        return self.normalize_state(self.state.copy())
 
     def step(self, action):
         x, y, vx, vy, px, pv = self.state
@@ -86,7 +95,7 @@ class DroneEnv:
         # Check termination
         done, reward = self._check_termination(x, y, vx, vy, px)
 
-        return self.state.copy(), reward, done
+        return self.normalize_state(self.state.copy()), reward, done
 
     def _check_termination(self, x, y, vx, vy, px):
         # Out of bounds
