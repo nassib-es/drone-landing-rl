@@ -10,24 +10,36 @@ from env.drone_env import DroneEnv
 from src.dqn import DQNAgent
 
 # ── Load best model ──────────────────────────────────────────────
-env   = DroneEnv(platform_speed=1.5)
+env   = DroneEnv(platform_speed=0.8)
 agent = DQNAgent(env.state_size, env.action_size)
 agent.load('models/best_model.pt')
 agent.epsilon = 0.0
 
-# ── Run one episode ──────────────────────────────────────────────
-state = env.reset()
-frames = []
-done   = False
+# ── Run multiple episodes until a landing ────────────────────────
+all_frames  = []
+all_outcomes = []
+MAX_ATTEMPTS = 10
 
-while not done:
-    frames.append(env.state.copy())
-    action = agent.act(state)
-    state, reward, done = env.step(action)
-frames.append(env.state.copy())
+for attempt in range(MAX_ATTEMPTS):
+    frames = []
+    state  = env.reset()
+    done   = False
 
-print(f"Episode length: {len(frames)} steps")
-print(f"Outcome: {'LANDED!' if reward > 50 else 'CRASHED'}")
+    while not done:
+        frames.append((env.state.copy(), attempt))
+        action = agent.act(state)
+        state, reward, done = env.step(action)
+    frames.append((env.state.copy(), attempt))
+
+    outcome = 'LANDED' if reward > 50 else 'CRASHED'
+    all_frames.extend(frames)
+    all_outcomes.append(outcome)
+    print(f"Attempt {attempt+1}: {outcome} ({len(frames)} steps)")
+
+    if outcome == 'LANDED':
+        break
+
+print(f"\nTotal frames: {len(all_frames)}")
 
 # ── Setup figure ─────────────────────────────────────────────────
 fig, ax = plt.subplots(figsize=(10, 8))
@@ -51,13 +63,13 @@ pw = env.PLATFORM_WIDTH
 py = env.PLATFORM_Y
 
 platform_patch = patches.Rectangle(
-    (frames[0][4] - pw/2, py - 0.1),
+    (all_frames[0][0][4] - pw/2, py - 0.1),  # all_frames[0][0] is the state
     pw, 0.2, color='#00D4FF', zorder=3
 )
 ax.add_patch(platform_patch)
 
 # Drone starting position
-x0, y0 = frames[0][0], frames[0][1]
+x0, y0 = all_frames[0][0][0], all_frames[0][0][1]
 
 # Drone — rectangle body + 4 rotor arms
 drone_body  = patches.FancyBboxPatch((x0-0.4, y0-0.15), 0.8, 0.3,
@@ -80,7 +92,7 @@ outcome_text = ax.text(0, 14.5, '', color='#81C784', fontsize=10,
                        ha='center', fontweight='bold')
 
 def update(frame_idx):
-    s = frames[frame_idx]
+    s, attempt = all_frames[frame_idx]
     x, y, vx, vy, px, pv = s
 
     drone_body.set_x(x - 0.4)
@@ -91,6 +103,11 @@ def update(frame_idx):
     prop_r.center = (x+0.7, y)
     platform_patch.set_x(px - pw/2)
 
+    outcome = all_outcomes[attempt] if attempt < len(all_outcomes) else ''
+    color   = '#81C784' if outcome == 'LANDED' else '#FF4444'
+    outcome_text.set_text(f'Attempt {attempt+1}: {outcome}')
+    outcome_text.set_color(color)
+
     step_text.set_text(
         f'Step {frame_idx:3d} | '
         f'Drone ({x:.1f}, {y:.1f}) | '
@@ -98,14 +115,10 @@ def update(frame_idx):
         f'Platform {px:.1f}'
     )
 
-    if frame_idx == len(frames) - 1:
-        outcome_text.set_text('LANDED! ✓' if reward > 50 else 'CRASHED ✗')
-        outcome_text.set_color('#81C784' if reward > 50 else '#FF4444')
-
     return drone_body, arm_l, arm_r, prop_l, prop_r, platform_patch, step_text, outcome_text
 
 anim = animation.FuncAnimation(
-    fig, update, frames=len(frames),
+    fig, update, frames=len(all_frames),
     interval=50, blit=True
 )
 
