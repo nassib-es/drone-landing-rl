@@ -59,7 +59,7 @@ State (6) → Linear(128) → ReLU → Linear(128) → ReLU → Q-values (4)
 python src/train.py
 ```
 
-Default: 3000 episodes, batch size 64, lr=0.0005, gamma=0.99
+Default: 3000 episodes, batch size 64, lr=0.001, gamma=0.99
 
 ---
 
